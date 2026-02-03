@@ -67,6 +67,36 @@ def closest_point_handles(
 	return face_indices, points, barycentric
 
 
+def vertex_handle_indices(
+	face_indices: np.ndarray,
+	barycentric: np.ndarray,
+	faces: np.ndarray,
+) -> np.ndarray:
+	"""Pick a single face vertex as the handle for each closest point.
+
+	Selects the vertex with the largest barycentric weight.
+	"""
+	tri = faces[face_indices]
+	max_idx = np.argmax(barycentric, axis=1)
+	handle_vertices = tri[np.arange(tri.shape[0]), max_idx]
+	return handle_vertices
+
+
+def aggregate_vertex_constraints(
+	n_vertices: int,
+	handle_vertices: np.ndarray,
+	handle_disp: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray]:
+	"""Average handle displacements for possibly repeated vertices."""
+	accum = np.zeros((n_vertices, 3), dtype=handle_disp.dtype)
+	counts = np.zeros((n_vertices, 1), dtype=np.int32)
+	accum[handle_vertices] += handle_disp
+	counts[handle_vertices] += 1
+	b = np.where(counts[:, 0] > 0)[0]
+	bc = accum[b] / counts[b]
+	return b, bc
+
+
 def face_to_vertex_constraints(
 	n_vertices: int,
 	face_indices: np.ndarray,
@@ -103,13 +133,13 @@ def solve_biharmonic(
 	return disp
 
 
-def transfer_with_barycentric_handles(
+def transfer_with_vertex_handles(
 	low_vertices: np.ndarray,
 	low_def_vertices: np.ndarray,
 	high_vertices: np.ndarray,
 	high_faces: np.ndarray,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-	"""Transfer deformation using barycentric face handles.
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+	"""Transfer deformation using vertex handles.
 
 	Returns
 	-------
@@ -117,23 +147,22 @@ def transfer_with_barycentric_handles(
 		Deformed high-res vertices.
 	disp
 		Per-vertex displacement on the high-res mesh.
-	face_indices
-		Face index for each handle on the high-res mesh.
+	handle_vertices
+		Vertex handle indices on the high-res mesh.
 	handle_disp
 		Displacement at each handle.
-	barycentric
-		Barycentric weights for each handle.
 	"""
 	face_indices, _, barycentric = closest_point_handles(
 		low_vertices, high_vertices, high_faces
 	)
+	handle_vertices = vertex_handle_indices(face_indices, barycentric, high_faces)
 	handle_disp = low_def_vertices - low_vertices
-	b, bc = face_to_vertex_constraints(
-		high_vertices.shape[0], face_indices, high_faces, handle_disp
+	b, bc = aggregate_vertex_constraints(
+		high_vertices.shape[0], handle_vertices, handle_disp
 	)
 	disp = solve_biharmonic(high_vertices, high_faces, b, bc, k=2)
 	high_def_vertices = high_vertices + disp
-	return high_def_vertices, disp, face_indices, handle_disp, barycentric
+	return high_def_vertices, disp, handle_vertices, handle_disp
 
 
 # -----------------------------
@@ -226,11 +255,24 @@ def _infer_mesh_roles(
 	return low, active, high
 
 
+def _same_topology(obj_a: bpy.types.Object, obj_b: bpy.types.Object) -> bool:
+	if len(obj_a.data.vertices) != len(obj_b.data.vertices):
+		return False
+	if len(obj_a.data.polygons) != len(obj_b.data.polygons):
+		return False
+	polys_a = [tuple(p.vertices) for p in obj_a.data.polygons]
+	polys_b = [tuple(p.vertices) for p in obj_b.data.polygons]
+	return polys_a == polys_b
+
+
 class TransferBiharmonicOperator(Operator):
 	"""Transfer deformation from low-res to high-res using libigl."""
 
 	bl_idname = "scene.transfer_biharmonic"
 	bl_label = "Transfer Deformation (IGL)"
+	bl_description = (
+		"Select three meshes (active = low-res deformed) and transfer deformation to high-res"
+	)
 
 	def execute(self, context: bpy.types.Context):
 		if igl is None:
@@ -244,6 +286,12 @@ class TransferBiharmonicOperator(Operator):
 			return result
 		low_obj, low_def_obj, high_obj = result
 
+		if not _same_topology(low_obj, low_def_obj):
+			return _report_and_cancel(
+				self,
+				"Low-res and deformed low-res meshes must have identical topology (same faces).",
+			)
+
 		low_v, _ = mesh_to_numpy_world(low_obj)
 		low_def_v, _ = mesh_to_numpy_world(low_def_obj)
 		high_v, high_f = mesh_to_numpy_world(high_obj)
@@ -255,7 +303,7 @@ class TransferBiharmonicOperator(Operator):
 			)
 
 		self.report({'INFO'}, "Running biharmonic transfer...")
-		high_def_v, _, _, _, _ = transfer_with_barycentric_handles(
+		high_def_v, _, _, _ = transfer_with_vertex_handles(
 			low_v, low_def_v, high_v, high_f
 		)
 
