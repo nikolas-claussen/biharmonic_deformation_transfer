@@ -1,5 +1,6 @@
 # Ignore OBJ test meshes
 *.obj
+*.blend
 
 # Ignore inspiration file from other project
 blender_tissue_cartography.py
