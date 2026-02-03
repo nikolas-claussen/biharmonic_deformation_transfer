@@ -6,7 +6,18 @@ If you edit the add-on code, rebuild the platform zips using Blender’s CLI. Th
 Edit the add-on in:
 - `biharmonic_deformation_transfer/__init__.py`
 
-## 2) (Optional) Refresh wheels
+## 2) (Optional) Locally install python modules 
+
+To locally install libraries like `igl` in blender's python, proceed as follow (in blender's python console):
+- Identify blender python executable via `import sys; print(sys.executable)`
+- Identify path for blender python modules via `import bpy; bpy.utils.user_resource("SCRIPTS", path="modules")`
+- Install via `pip` : 
+```zsh
+PATH_TO_BLENDER_PYTHON -m pip install libigl --target="PATH_TO_BLENDER_PYTHON_MODULES" --upgrade
+```
+
+
+## 3) (Optional) Refresh wheels
 If you need to update dependencies, download wheels into `biharmonic_deformation_transfer/wheels/`:
 
 ```zsh
@@ -28,7 +39,7 @@ python -m pip download --only-binary=:all: --no-deps --platform win_amd64 --pyth
 python -m pip download --only-binary=:all: --no-deps --platform win_amd64 --python-version 311 --implementation cp --abi cp311 -d "$WHEELS" scipy
 ```
 
-## 3) Build zips
+## 4) Build zips
 
 ```zsh
 /Applications/Blender.app/Contents/MacOS/Blender \
@@ -39,7 +50,7 @@ python -m pip download --only-binary=:all: --no-deps --platform win_amd64 --pyth
   --verbose
 ```
 
-## 4) Validate zips
+## 5) Validate zips
 
 ```zsh
 /Applications/Blender.app/Contents/MacOS/Blender --command extension validate /Users/nc1333/Documents/Personal/blender_cecile/dist/biharmonic_deformation_transfer-0.1.0-macos_x64.zip
