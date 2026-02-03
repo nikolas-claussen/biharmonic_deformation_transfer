@@ -1,0 +1,28 @@
+schema_version = "1.0.0"
+
+id = "biharmonic_deformation_transfer"
+version = "0.1.0"
+name = "Biharmonic Deformation Transfer"
+tagline = "Transfer low-res deformations to high-res meshes via libigl"
+maintainer = "Unknown"
+type = "add-on"
+blender_version_min = "4.0.0"
+license = ["MIT"]
+
+platforms = [
+  "macos-x64",
+  "macos-arm64",
+  "windows-x64",
+]
+
+wheels = [
+  "wheels/libigl-2.4.1-cp311-cp311-macosx_10_9_x86_64.whl",
+  "wheels/libigl-2.6.1-cp311-cp311-macosx_11_0_arm64.whl",
+  "wheels/libigl-2.6.1-cp311-cp311-win_amd64.whl",
+  "wheels/numpy-2.4.2-cp311-cp311-macosx_10_9_x86_64.whl",
+  "wheels/numpy-2.4.2-cp311-cp311-macosx_11_0_arm64.whl",
+  "wheels/numpy-2.4.2-cp311-cp311-win_amd64.whl",
+  "wheels/scipy-1.14.0-cp311-cp311-macosx_10_9_x86_64.whl",
+  "wheels/scipy-1.17.0-cp311-cp311-macosx_12_0_arm64.whl",
+  "wheels/scipy-1.17.0-cp311-cp311-win_amd64.whl",
+]
