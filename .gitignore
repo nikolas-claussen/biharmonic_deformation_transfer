@@ -1,0 +1,10 @@
+# Ignore OBJ test meshes
+*.obj
+
+# Ignore inspiration file from other project
+blender_tissue_cartography.py
+
+# Common ignores
+__pycache__/
+.ipynb_checkpoints/
+.DS_Store
