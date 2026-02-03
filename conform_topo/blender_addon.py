@@ -269,9 +269,9 @@ class TransferBiharmonicOperator(Operator):
 	"""Transfer deformation from low-res to high-res using libigl."""
 
 	bl_idname = "scene.transfer_biharmonic"
-	bl_label = "Transfer Deformation"
+	bl_label = "Transfer Deformation (IGL)"
 	bl_description = (
-		"Select three meshes (active = low-res deformed) and transfer deformation to high-res. May take ~1min."
+		"Select three meshes (active = low-res deformed) and transfer deformation to high-res"
 	)
 
 	def execute(self, context: bpy.types.Context):
@@ -324,7 +324,7 @@ class BiharmonicTransferPanel(Panel):
 
 	def draw(self, context: bpy.types.Context):
 		layout = self.layout
-		layout.operator(TransferBiharmonicOperator.bl_idname, text="Transfer Deformation")
+		layout.operator(TransferBiharmonicOperator.bl_idname, text="Transfer Deformation (IGL)")
 
 
 def register():
