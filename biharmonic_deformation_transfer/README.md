@@ -1,6 +1,27 @@
 # Biharmonic Deformation Transfer (Blender Add-on)
 
-Transfers deformations from a low-res mesh to a high-res mesh using libigl’s biharmonic solve.
+Transfers deformations from a (low-resolution) mesh to another (high-resolution) mesh.
+
+Example use case: you sculpted a high-resolution mesh A, and then created a lower-resolution
+mesh B with a clean topology (say, for for deployment in a video game with textures baked from A).
+After inspection, you make some updates to the low-res mesh, resulting in a deformed low-mesh C.
+You now want to _transfer_ the deformation B → C to the high-res mesh A.
+
+
+
+<figure>
+  <img src="../Screenshot_deformation_transfer.png" alt="Description of the image"/>
+  <figcaption>Bottom: original and deformed low-res mesh.
+              Top: original high-res mesh and transfered deformation created by addon (orange)
+  </figcaption>
+</figure>
+
+
+Under the hood, the addon uses _biharmonic deformations_, implemented
+using the `libigl` library. This means tha the high-res mesh is
+treated like an elastic sheet that resists bending and stretching.
+The vertices of the low-res mesh are used as _handles_ at which a
+deformation is imposed on the high-res mesh.
 
 ## Install
 1. In Blender, open **Edit → Preferences → Extensions**.
@@ -13,8 +34,8 @@ Transfers deformations from a low-res mesh to a high-res mesh using libigl’s b
 ## Use
 1. Select three mesh objects:
    - Low-res mesh (original)
-   - High-res mesh (target)
-   - Low-res deformed mesh (**active object**)
+   - High-res mesh (target - must be spatially aligned with original)
+   - Low-res deformed mesh (must have same topology as original)
 2. Go to **Scene Properties → Biharmonic Deformation Transfer**.
 3. Click **Transfer Deformation (IGL)**.
 
