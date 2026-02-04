@@ -8,7 +8,7 @@ After inspection, you make some updates to the low-res mesh, resulting in a defo
 You now want to _transfer_ the deformation B → C to the high-res mesh A.
 
 <figure>
-  <img src="../Screenshot_deformation_transfer.png" alt="Description of the image"/>
+  <img src="Screenshot_deformation_transfer.png" alt="Description of the image"/>
   <figcaption>Bottom: original and deformed low-res mesh.
               Top: original high-res mesh and transfered deformation created by addon (orange)
   </figcaption>
