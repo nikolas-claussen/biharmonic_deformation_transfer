@@ -23,7 +23,7 @@ except Exception:  # pragma: no cover - Blender environment dependency
 
 bl_info = {
 	"name": "Biharmonic Deformation Transfer",
-	"blender": (4, 0, 0),
+	"blender": (4, 2, 0),
 	"category": "Scene",
 }
 
@@ -337,7 +337,7 @@ class TransferBiharmonicOperator(Operator):
 	"""Transfer deformation from low-res to high-res using libigl."""
 
 	bl_idname = "scene.transfer_biharmonic"
-	bl_label = "Transfer Deformation (IGL)"
+	bl_label = "Transfer Deformation"
 	bl_description = (
 		"Select original/deformed/transfer-to meshes and transfer deformation. Can take ~1min for large meshes."
 	)

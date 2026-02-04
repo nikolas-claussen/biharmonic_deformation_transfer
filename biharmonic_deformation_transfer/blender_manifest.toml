@@ -6,7 +6,7 @@ name = "Biharmonic Deformation Transfer"
 tagline = "Transfer low-res deformations to high-res meshes via libigl"
 maintainer = "Nikolas Claussen <nikolas.claussen@gmail.com>"
 type = "add-on"
-blender_version_min = "4.0.0"
+blender_version_min = "4.2.0"
 license = ["MIT"]
 
 platforms = [
