@@ -46,14 +46,14 @@ python -m pip download --only-binary=:all: --no-deps --platform win_amd64 --pyth
   --command extension build \
   --source-dir . \
   --split-platforms \
-  --output-dir ./dist \
+  --output-dir ../dist \
   --verbose
 ```
 
 ## 5) Validate zips
 
 ```zsh
-/Applications/Blender.app/Contents/MacOS/Blender --command extension validate ./dist/biharmonic_deformation_transfer-0.1.0-macos_x64.zip
-/Applications/Blender.app/Contents/MacOS/Blender --command extension validate ./dist/biharmonic_deformation_transfer-0.1.0-macos_arm64.zip
-/Applications/Blender.app/Contents/MacOS/Blender --command extension validate ./dist/biharmonic_deformation_transfer-0.1.0-windows_x64.zip
+/Applications/Blender.app/Contents/MacOS/Blender --command extension validate ../dist/biharmonic_deformation_transfer-0.1.0-macos_x64.zip
+/Applications/Blender.app/Contents/MacOS/Blender --command extension validate ../dist/biharmonic_deformation_transfer-0.1.0-macos_arm64.zip
+/Applications/Blender.app/Contents/MacOS/Blender --command extension validate ../dist/biharmonic_deformation_transfer-0.1.0-windows_x64.zip
 ```
