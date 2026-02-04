@@ -2,6 +2,11 @@
 
 If you edit the add-on code, rebuild the platform zips using Blender’s CLI. The extension source lives in the `biharmonic_deformation_transfer/` folder and the output zips go to `dist/`.
 
+## 0) Git with large files.
+
+Use `git update-index --assume-unchanged FILE_NAME` to mark large files (like the `.zip`'s)
+as "untracked" - they will be uploaded to github, but not included in the `git` history.
+
 ## 1) Update Python code
 Edit the add-on in:
 - `biharmonic_deformation_transfer/__init__.py`

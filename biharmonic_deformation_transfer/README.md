@@ -7,14 +7,6 @@ mesh B with a clean topology (say, for for deployment in a video game with textu
 After inspection, you make some updates to the low-res mesh, resulting in a deformed low-mesh C.
 You now want to _transfer_ the deformation B → C to the high-res mesh A.
 
-<figure>
-  <img src="../Screenshot_deformation_transfer.png" alt="Description of the image"/>
-  <figcaption>Bottom: original and deformed low-res mesh.
-              Top: original high-res mesh and transfered deformation created by addon (orange)
-  </figcaption>
-</figure>
-
-
 Under the hood, the addon uses _biharmonic deformations_, implemented
 using the `libigl` library. This means tha the high-res mesh is
 treated like an elastic sheet that resists bending and stretching.
@@ -31,11 +23,11 @@ deformation is imposed on the high-res mesh.
 4. Enable the add-on.
 
 ## Use
-1. Select three mesh objects:
-   - Low-res mesh (original)
-   - High-res mesh (target - must be spatially aligned with original)
-   - Low-res deformed mesh (must have same topology as original)
-2. Go to **Scene Properties → Biharmonic Deformation Transfer**.
+1. Go to **Scene Properties → Biharmonic Deformation Transfer**.
+2. Select three mesh objects:
+   - Original: low-res mesh
+   - Deformed: deformed mesh (must have same topology as original)
+   - Transfer-to: high-res mesh (must be spatially aligned with original)
 3. Click **Transfer Deformation**.
 
 A new mesh named `<HighResName>_deformed` will be created in the scene.
