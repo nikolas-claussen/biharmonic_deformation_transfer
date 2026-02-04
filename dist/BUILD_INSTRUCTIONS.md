@@ -21,7 +21,7 @@ PATH_TO_BLENDER_PYTHON -m pip install libigl --target="PATH_TO_BLENDER_PYTHON_MO
 If you need to update dependencies, download wheels into `biharmonic_deformation_transfer/wheels/`:
 
 ```zsh
-WHEELS=/Users/nc1333/Documents/Personal/blender_cecile/biharmonic_deformation_transfer/wheels
+WHEELS=./biharmonic_deformation_transfer/wheels
 
 # macOS arm64
 python -m pip download --only-binary=:all: --no-deps --platform macosx_11_0_arm64 --python-version 311 --implementation cp --abi cp311 -d "$WHEELS" libigl
@@ -44,16 +44,16 @@ python -m pip download --only-binary=:all: --no-deps --platform win_amd64 --pyth
 ```zsh
 /Applications/Blender.app/Contents/MacOS/Blender \
   --command extension build \
-  --source-dir /Users/nc1333/Documents/Personal/blender_cecile/biharmonic_deformation_transfer \
+  --source-dir . \
   --split-platforms \
-  --output-dir /Users/nc1333/Documents/Personal/blender_cecile/dist \
+  --output-dir ./dist \
   --verbose
 ```
 
 ## 5) Validate zips
 
 ```zsh
-/Applications/Blender.app/Contents/MacOS/Blender --command extension validate /Users/nc1333/Documents/Personal/blender_cecile/dist/biharmonic_deformation_transfer-0.1.0-macos_x64.zip
-/Applications/Blender.app/Contents/MacOS/Blender --command extension validate /Users/nc1333/Documents/Personal/blender_cecile/dist/biharmonic_deformation_transfer-0.1.0-macos_arm64.zip
-/Applications/Blender.app/Contents/MacOS/Blender --command extension validate /Users/nc1333/Documents/Personal/blender_cecile/dist/biharmonic_deformation_transfer-0.1.0-windows_x64.zip
+/Applications/Blender.app/Contents/MacOS/Blender --command extension validate ./dist/biharmonic_deformation_transfer-0.1.0-macos_x64.zip
+/Applications/Blender.app/Contents/MacOS/Blender --command extension validate ./dist/biharmonic_deformation_transfer-0.1.0-macos_arm64.zip
+/Applications/Blender.app/Contents/MacOS/Blender --command extension validate ./dist/biharmonic_deformation_transfer-0.1.0-windows_x64.zip
 ```
