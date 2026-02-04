@@ -5,7 +5,7 @@
 
 # ignore distribution files and wheels
 #*.zip
-#*.whl
+*.whl
 
 
 # Common ignores
