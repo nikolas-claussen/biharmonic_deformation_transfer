@@ -1,17 +1,18 @@
 """Blender add-on: Biharmonic deformation transfer using libigl.
 
-Select three meshes: low-res (B), high-res (A), and low-res deformed (C).
-The active object must be the deformed low-res mesh (C). The add-on infers
-low/high by vertex count and creates a deformed high-res mesh.
+Select three meshes: original (low-res), deformed (low-res), and transfer-to (high-res).
+The add-on transfers the deformation from original → deformed onto transfer-to.
 """
 
 from __future__ import annotations
 
 import numpy as np
+from scipy import sparse
 
 import bpy
 import bmesh
 from bpy.types import Operator, Panel
+from bpy.props import BoolProperty, EnumProperty
 from mathutils import Vector
 
 try:
@@ -133,6 +134,80 @@ def solve_biharmonic(
 	return disp
 
 
+def build_biharmonic_Q(vertices: np.ndarray, faces: np.ndarray) -> sparse.csr_matrix:
+	"""Build the bi-Laplacian quadratic form Q = L * M^{-1} * L."""
+	L = igl.cotmatrix(vertices, faces)
+	M = igl.massmatrix(vertices, faces, igl.MASSMATRIX_TYPE_VORONOI)
+	m_diag = M.diagonal()
+	m_diag_safe = np.where(m_diag > 0, m_diag, 1.0)
+	Minv = sparse.diags(1.0 / m_diag_safe)
+	Q = L @ Minv @ L
+	return Q.tocsr()
+
+
+def aggregate_barycentric_constraints(
+	face_indices: np.ndarray,
+	barycentric: np.ndarray,
+	handle_disp: np.ndarray,
+	decimals: int = 6,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+	"""Merge duplicate barycentric handles by averaging displacements."""
+	rounded = np.round(barycentric, decimals=decimals)
+	key = np.concatenate([face_indices[:, None], rounded], axis=1)
+	dtype = np.dtype(
+		[("f", np.int64), ("b0", np.float64), ("b1", np.float64), ("b2", np.float64)]
+	)
+	keys = np.rec.fromarrays(key.T, dtype=dtype)
+	unique_keys, inv = np.unique(keys, return_inverse=True)
+	m = unique_keys.shape[0]
+	disp_accum = np.zeros((m, 3), dtype=handle_disp.dtype)
+	counts = np.zeros((m, 1), dtype=np.int32)
+	np.add.at(disp_accum, inv, handle_disp)
+	np.add.at(counts, inv, 1)
+	disp_avg = disp_accum / counts
+	face_unique = np.array([uk[0] for uk in unique_keys], dtype=np.int32)
+	bary_unique = np.vstack([(uk[1], uk[2], uk[3]) for uk in unique_keys]).astype(
+		barycentric.dtype
+	)
+	return face_unique, bary_unique, disp_avg
+
+
+def build_barycentric_Aeq(
+	faces: np.ndarray,
+	face_indices: np.ndarray,
+	barycentric: np.ndarray,
+) -> sparse.csr_matrix:
+	"""Construct Aeq for barycentric handle constraints."""
+	tri = faces[face_indices]
+	rows = np.repeat(np.arange(face_indices.shape[0]), 3)
+	cols = tri.reshape(-1)
+	data = barycentric.reshape(-1)
+	Aeq = sparse.coo_matrix(
+		(data, (rows, cols)),
+		shape=(face_indices.shape[0], faces.max() + 1),
+	)
+	return Aeq.tocsr()
+
+
+def solve_biharmonic_barycentric(
+	vertices: np.ndarray,
+	faces: np.ndarray,
+	face_indices: np.ndarray,
+	barycentric: np.ndarray,
+	handle_disp: np.ndarray,
+) -> np.ndarray:
+	"""Solve biharmonic displacement with barycentric equality constraints."""
+	Q = build_biharmonic_Q(vertices, faces)
+	n = vertices.shape[0]
+	Aeq = build_barycentric_Aeq(faces, face_indices, barycentric)
+	B = np.zeros((n, 3), dtype=np.float64)
+	Beq = handle_disp.astype(np.float64, copy=False)
+	b = np.array([], dtype=np.int64)
+	bc = np.zeros((0, 3), dtype=np.float64)
+	disp = igl.min_quad_with_fixed(Q.tocsc(), B, b, bc, Aeq.tocsc(), Beq, True)
+	return disp
+
+
 def transfer_with_vertex_handles(
 	low_vertices: np.ndarray,
 	low_def_vertices: np.ndarray,
@@ -163,6 +238,27 @@ def transfer_with_vertex_handles(
 	disp = solve_biharmonic(high_vertices, high_faces, b, bc, k=2)
 	high_def_vertices = high_vertices + disp
 	return high_def_vertices, disp, handle_vertices, handle_disp
+
+
+def transfer_with_barycentric_handles(
+	low_vertices: np.ndarray,
+	low_def_vertices: np.ndarray,
+	high_vertices: np.ndarray,
+	high_faces: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+	"""Transfer deformation using barycentric face handles."""
+	face_indices, _, barycentric = closest_point_handles(
+		low_vertices, high_vertices, high_faces
+	)
+	handle_disp = low_def_vertices - low_vertices
+	face_u, bary_u, disp_u = aggregate_barycentric_constraints(
+		face_indices, barycentric, handle_disp
+	)
+	disp = solve_biharmonic_barycentric(
+		high_vertices, high_faces, face_u, bary_u, disp_u
+	)
+	high_def_vertices = high_vertices + disp
+	return high_def_vertices, disp, face_u, disp_u, bary_u
 
 
 # -----------------------------
@@ -219,40 +315,12 @@ def _report_and_cancel(op: Operator, message: str):
 	return {'CANCELLED'}
 
 
-def _infer_mesh_roles(
-	op: Operator,
-	context: bpy.types.Context,
-) -> tuple[bpy.types.Object, bpy.types.Object, bpy.types.Object] | set:
-	selected = [obj for obj in context.selected_objects if obj.type == 'MESH']
-	if len(selected) != 3:
-		return _report_and_cancel(op, "Select exactly three mesh objects.")
-
-	active = context.view_layer.objects.active
-	if active is None or active.type != 'MESH' or active not in selected:
-		return _report_and_cancel(op, "Active object must be the deformed low-res mesh.")
-
-	remaining = [obj for obj in selected if obj != active]
-	if len(remaining) != 2:
-		return _report_and_cancel(op, "Select exactly three meshes with one active.")
-
-	active_count = len(active.data.vertices)
-	rem_counts = [len(obj.data.vertices) for obj in remaining]
-
-	low = None
-	high = None
-	for obj in remaining:
-		if len(obj.data.vertices) == active_count:
-			low = obj
-		elif len(obj.data.vertices) > active_count:
-			high = obj
-
-	if low is None or high is None:
-		return _report_and_cancel(
-			op,
-			"Could not infer low/high meshes. Ensure active is low-res deformed and the other two are low/high.",
-		)
-
-	return low, active, high
+def _mesh_enum_items(self, context: bpy.types.Context):
+	items = []
+	for obj in context.scene.objects:
+		if obj.type == 'MESH':
+			items.append((obj.name, obj.name, ""))
+	return items
 
 
 def _same_topology(obj_a: bpy.types.Object, obj_b: bpy.types.Object) -> bool:
@@ -271,7 +339,13 @@ class TransferBiharmonicOperator(Operator):
 	bl_idname = "scene.transfer_biharmonic"
 	bl_label = "Transfer Deformation (IGL)"
 	bl_description = (
-		"Select three meshes (active = low-res deformed) and transfer deformation to high-res"
+		"Select original/deformed/transfer-to meshes and transfer deformation to high-res"
+	)
+
+	use_barycentric: BoolProperty(
+		name="Use barycentric handles",
+		description="Use barycentric face handles (more accurate, slower)",
+		default=False,
 	)
 
 	def execute(self, context: bpy.types.Context):
@@ -281,34 +355,53 @@ class TransferBiharmonicOperator(Operator):
 				"libigl (python bindings) not available. Install it in Blender's Python environment.",
 			)
 
-		result = _infer_mesh_roles(self, context)
-		if isinstance(result, set):
-			return result
-		low_obj, low_def_obj, high_obj = result
-
-		if not _same_topology(low_obj, low_def_obj):
+		orig_name = context.scene.biharmonic_original_mesh
+		def_name = context.scene.biharmonic_deformed_mesh
+		transfer_name = context.scene.biharmonic_transfer_to_mesh
+		orig_obj = context.scene.objects.get(orig_name) if orig_name else None
+		def_obj = context.scene.objects.get(def_name) if def_name else None
+		transfer_obj = context.scene.objects.get(transfer_name) if transfer_name else None
+		if orig_obj is None or def_obj is None or transfer_obj is None:
 			return _report_and_cancel(
-				self,
-				"Low-res and deformed low-res meshes must have identical topology (same faces).",
+				self, "Select original, deformed, and transfer-to meshes."
+			)
+		if orig_obj == def_obj:
+			return _report_and_cancel(
+				self, "Original and deformed meshes must be different objects."
+			)
+		if orig_obj == transfer_obj or def_obj == transfer_obj:
+			return _report_and_cancel(
+				self, "Transfer-to mesh must be different from original/deformed meshes."
 			)
 
-		low_v, _ = mesh_to_numpy_world(low_obj)
-		low_def_v, _ = mesh_to_numpy_world(low_def_obj)
-		high_v, high_f = mesh_to_numpy_world(high_obj)
+		if not _same_topology(orig_obj, def_obj):
+			return _report_and_cancel(
+				self,
+				"Original and deformed meshes must have identical topology (same faces).",
+			)
+
+		low_v, _ = mesh_to_numpy_world(orig_obj)
+		low_def_v, _ = mesh_to_numpy_world(def_obj)
+		high_v, high_f = mesh_to_numpy_world(transfer_obj)
 
 		if low_v.shape[0] != low_def_v.shape[0]:
 			return _report_and_cancel(
 				self,
-				"Low-res and deformed low-res meshes must have the same vertex count.",
+				"Original and deformed meshes must have the same vertex count.",
 			)
 
 		self.report({'INFO'}, "Running biharmonic transfer...")
-		high_def_v, _, _, _ = transfer_with_vertex_handles(
-			low_v, low_def_v, high_v, high_f
-		)
+		if self.use_barycentric:
+			high_def_v, _, _, _, _ = transfer_with_barycentric_handles(
+				low_v, low_def_v, high_v, high_f
+			)
+		else:
+			high_def_v, _, _, _ = transfer_with_vertex_handles(
+				low_v, low_def_v, high_v, high_f
+			)
 
-		new_name = f"{high_obj.name}_deformed"
-		create_mesh_object(new_name, high_def_v, high_f, high_obj, context)
+		new_name = f"{transfer_obj.name}_deformed"
+		create_mesh_object(new_name, high_def_v, high_f, transfer_obj, context)
 		self.report({'INFO'}, f"Created {new_name}.")
 		return {'FINISHED'}
 
@@ -324,15 +417,50 @@ class BiharmonicTransferPanel(Panel):
 
 	def draw(self, context: bpy.types.Context):
 		layout = self.layout
-		layout.operator(TransferBiharmonicOperator.bl_idname, text="Transfer Deformation (IGL)")
+		layout.prop(context.scene, "biharmonic_original_mesh")
+		layout.prop(context.scene, "biharmonic_deformed_mesh")
+		layout.prop(context.scene, "biharmonic_transfer_to_mesh")
+		layout.prop(context.scene, "biharmonic_use_barycentric")
+		op = layout.operator(
+			TransferBiharmonicOperator.bl_idname, text="Transfer Deformation (IGL)"
+		)
+		op.use_barycentric = context.scene.biharmonic_use_barycentric
 
 
 def register():
+	bpy.types.Scene.biharmonic_original_mesh = EnumProperty(
+		name="Original",
+		description="Original low-res mesh (must match deformed topology)",
+		items=_mesh_enum_items,
+	)
+	bpy.types.Scene.biharmonic_deformed_mesh = EnumProperty(
+		name="Deformed",
+		description="Deformed low-res mesh (must match original topology)",
+		items=_mesh_enum_items,
+	)
+	bpy.types.Scene.biharmonic_transfer_to_mesh = EnumProperty(
+		name="Transfer-to",
+		description="High-res mesh to deform (must be spatially aligned with original)",
+		items=_mesh_enum_items,
+	)
+	bpy.types.Scene.biharmonic_use_barycentric = BoolProperty(
+		name="Use barycentric handles",
+		description="Use barycentric face handles (more accurate, slower)",
+		default=False,
+	)
 	bpy.utils.register_class(TransferBiharmonicOperator)
 	bpy.utils.register_class(BiharmonicTransferPanel)
 
 
 def unregister():
+	if hasattr(bpy.types.Scene, "biharmonic_original_mesh"):
+		del bpy.types.Scene.biharmonic_original_mesh
+	if hasattr(bpy.types.Scene, "biharmonic_deformed_mesh"):
+		del bpy.types.Scene.biharmonic_deformed_mesh
+	if hasattr(bpy.types.Scene, "biharmonic_transfer_to_mesh"):
+		del bpy.types.Scene.biharmonic_transfer_to_mesh
+	if hasattr(bpy.types.Scene, "biharmonic_use_barycentric"):
+		del bpy.types.Scene.biharmonic_use_barycentric
 	bpy.utils.unregister_class(BiharmonicTransferPanel)
 	bpy.utils.unregister_class(TransferBiharmonicOperator)
 
